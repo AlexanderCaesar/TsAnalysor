@@ -5,7 +5,7 @@
 #pragma warning(disable: 4996) // POSIX setmode and fileno deprecated
 
 FILE *g_ts_file  = NULL;    //ts 原始文件
-FILE *g_ts_tag   = NULL;    //打印每个ts的详细信息
+FILE *g_ts_ts    = NULL;    //打印每个ts的详细信息
 FILE *g_ts_video = NULL;    //输出视频流信息
 FILE *g_ts_audio = NULL;    //输出音频流信息
 FILE *g_ts_out   = NULL;    //输出修改后的ts流
@@ -33,8 +33,8 @@ void openFlvFiles()
 	}
 	if(ts_ts_name)
 	{
-		g_ts_tag = fopen(ts_ts_name,"w");
-		if(!g_ts_tag)
+		g_ts_ts = fopen(ts_ts_name,"w");
+		if(!g_ts_ts)
 		{
 			printf("打开文件失败: %s\n",ts_ts_name);
 			system("pause");
@@ -81,8 +81,8 @@ void closeFlvFiles()
 {
 	if(g_ts_file)
 		fclose(g_ts_file);
-	if(g_ts_tag)
-		fclose(g_ts_tag);
+	if(g_ts_ts)
+		fclose(g_ts_ts);
 	if(g_ts_video)
 		fclose(g_ts_video);
 	if(g_ts_audio)

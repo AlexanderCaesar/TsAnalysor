@@ -60,10 +60,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\source\analysis.h" />
     <ClInclude Include="..\source\ts.h" />
     <ClInclude Include="..\source\tsfile.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\source\analysis.cpp" />
     <ClCompile Include="..\source\param.cpp" />
     <ClCompile Include="..\source\ts.cpp" />
     <ClCompile Include="..\source\tsflie.cpp" />
