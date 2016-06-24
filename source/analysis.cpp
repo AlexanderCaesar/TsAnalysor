@@ -392,12 +392,14 @@ void Anlysis::adaptation_field()
 		if(m_adt.adaptation_field_extension_flag)
 		{
 			//待添加
-		}
+		}		
 	}
+
+	m_ts.count = 5 + m_adt.adaptation_field_length;//读完TS自适应字段
 
 	if(m_param->b_ts)
 	{
-		fprintf(g_ts_ts,"自适应字段解析解析\n");
+		fprintf(g_ts_ts,"自适应字段解析\n");
 		fprintf(g_ts_ts,"adaptation_field_length:%d\n",m_adt.adaptation_field_length);
 		if(m_adt.adaptation_field_length)
 		{
@@ -410,6 +412,18 @@ void Anlysis::adaptation_field()
 			fprintf(g_ts_ts,"    transport_private_data_flag:%d\n",m_adt.transport_private_data_flag);
 			fprintf(g_ts_ts,"    adaptation_field_extension_flag:%d\n",m_adt.adaptation_field_extension_flag);
 		}
+	}
+}
+
+/* 分析ts PES包文件 */
+void Anlysis::anlysisPES()
+{
+	m_pes.packet_start_code_prefix = (m_ts.data[m_ts.count]<<16) + (m_ts.data[m_ts.count+1]<<8) + m_ts.data[m_ts.count+2]; m_ts.count += 3;
+
+	if(m_param->b_ts)
+	{
+		fprintf(g_ts_ts,"PES包头解析\n");
+		fprintf(g_ts_ts,"packet_start_code_prefix:%d\n",m_pes.packet_start_code_prefix);
 	}
 }
 
@@ -459,11 +473,15 @@ void Anlysis::anlysis()
 			}
 			else if(m_tsHeader.PID == m_VideoPID)//解析视频
 			{
-
+				unsigned int packet_start_code_prefix = (m_ts.data[m_ts.count]<<16) + (m_ts.data[m_ts.count+1]<<8) + m_ts.data[m_ts.count+2];
+				if(packet_start_code_prefix == 0x000001)
+					anlysisPES();
 			}
 			else if(m_tsHeader.PID == m_AudioPID)//解析音频
 			{
-
+				unsigned int packet_start_code_prefix = (m_ts.data[m_ts.count]<<16) + (m_ts.data[m_ts.count+1]<<8) + m_ts.data[m_ts.count+2];
+				if(packet_start_code_prefix == 0x000001)
+					anlysisPES();
 			}
 			else
 			{

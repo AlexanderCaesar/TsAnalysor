@@ -219,6 +219,7 @@ struct TSPMT
 };
 
 /* 自适应字段adaptation_field*/
+//功能如果当前NAL单元不够188字节，前面会用自适应字段填充
 struct TSADT
 {
 	/*adaptation_field_length 为指定紧随adaptation_field_length 的adaptation_field
@@ -313,6 +314,138 @@ struct TSADT
 	//待添加	
 };
 
+//PES包，一帧的开始
+struct PES
+{
+	/*packet_start_code_prefix 为24 比特码。同跟随它的stream_id 一起组成标
+	识包起始端的包起始码。packet_start_code_prefix 为比特串‘0000 0000 0000 
+	0000 0000 0001’（0x000001）	**/
+	unsigned int   packet_start_code_prefix;//包起始码
+	/*节目流中，stream_id 指示基本流的类型和编号
+	Stream_id 注流 编 码
+	1011 1100 1 program_stream_map
+	1011 1101 2 private_stream_1
+	1011 1110   padding_stream
+	1011 1111 3 private_stream_2
+	110x xxxx   ISO/IEC 13818-3 或 ISO/IEC 11172-3 或 ISO/IEC 13818-7 或 ISO/IEC 14496-3 音频流编号 x xxxx
+	1110 xxxx   ITU-T H.262 建议书 | ISO/IEC 13818-2, ISO/IEC 11172-2, ISO/IEC 14496-2 或 ITU-T H.264 建议书 | ISO/IEC 14496-10 视频流编号 xxxx
+	1111 0000 3 ECM_stream
+	1111 0001 3 EMM_stream
+	1111 0010 5 ITU-T H.222.0 建议书 | ISO/IEC 13818-1 附件A或 ISO/IEC 13818-6_DSMCC_stream
+	1111 0011 2 ISO/IEC_13522_stream
+	1111 0100 6 ITU-T H.222.1 建议书类型A
+	1111 0101 6 ITU-T H.222.1 建议书类型B
+	1111 0110 6 ITU-T H.222.1 建议书类型C
+	1111 0111 6 ITU-T H.222.1 建议书类型D
+	1111 1000 6 ITU-T H.222.1 建议书类型E
+	1111 1001 7 ancillary_stream
+	1111 1010   ISO/IEC 14496-1_SL-packetized_stream
+	1111 1011   ISO/IEC 14496-1_FlexMux_stream
+	1111 1100   元数据流
+	1111 1101 8 extended_stream_id
+	1111 1110   保留数据流
+	1111 1111 4 program_stream_directory
+	符号x 意味着 ‘0’值或 ‘1’值均可，并产生相同的流类型。流编号通过x 的取值给出。
+	注 1 — program_stream_map 类型的PES 包具有2.5.4.1 中指定的唯一句法。
+	注 2 — private_stream_1和ISO/IEC_13552_stream 类型的PES包遵从与ITU-T H.262建议书|ISO/IEC 13818-2视频和ISO/IEC
+	13818-3 音频流相同的PES 包句法。
+	注 3 — private_stream_2, ECM_stream 和EMM_stream 类型的PES 包类似于private_stream_1，除PES_packet_length 字段之
+	后未指定任何句法外。
+	注 4 — program_stream_directory 类型的PES 包具有2.5.5 中指定的唯一句法。
+	注 5 — DSM-CC_stream 类型的PES 包具有ISO/IEC 13818-6 中指定的唯一句法。
+	注 6 — 此stream_id 同表2-34 中的stream_type 0x09 有关。
+	注 7 — 此stream_type 0x09 仅在PES 包中使用，承载来自节目流或传输流中ISO/IEC 11172-1 系统流的数据（参阅2.4.3.8）。
+	注 8 — 采用 stream_id 0xFD (extended_stream_id) 确定此PES 包使用扩展的句法以允许确定附加的流类型。
+	**/
+	unsigned char  stream_id;//指示当前属于音频还是视频
+	/*16 比特字段指示PES 包中跟随该字段最后字节的字节数。0 值指示PES 包长度
+	既未指示也未限定并且仅在这样的PES 包中才被允许，该PES 包的有效载荷由来自传输流包中所包含的视
+	频基本流的字节组成。	**/
+	unsigned int   PES_packet_length;//PES 包长度
+	unsigned char  onezero;          //'10'
+	/*2 比特PES_scrambling_control 字段指示PES 包有效载荷的加扰方式。当
+	加扰在PES 等级上实施时，PES 包头，其中包括任选字段只要存在，应不加扰
+	00 不加扰
+	01 用户定义
+	10 用户定义
+	11 用户定义
+	**/
+	unsigned char  PES_scrambling_control;//加扰方式
+	/*此为1 比特字段，指示在此PES 包中该有效载荷的优先级。‘1’指示该PES 包有效
+	载荷比具有此字段置于‘0’的其他PES 包有效载荷有更高的有效载荷优先级。多路复用器
+	能够使用该	PES_priority 比特最佳化基本流内的数据。此字段不能由传输机制加以改变。
+	**/
+	unsigned char  PES_priority;          //优先级
+	unsigned char  data_alignment_indicator;
+	/*此为1 比特字段。置于‘1’时，它指示相关PES 包有效载荷的素材依靠版权所保护。置
+	于‘0’时不能确定该素材是否依靠版权所保护。
+	**/
+	unsigned char  copyright;//版权保护
+	/*此为1 比特字段。置于‘1’时，相关PES 包有效载荷的内容是原始的。置于‘0’
+	时，它指示相关PES 包有效载荷的内容是复制的。
+	**/
+	unsigned char  original_or_copy;
+	/*
+	此为2 比特字段。当PTS_DTS_flags 字段设置为‘10’时，PES 包头中PTS 字段
+	存在。当PTS_DTS_flags 字段设置为‘11’时，PES 包头中PTS 字段和DTS 字段均存在。当PTS_DTS_flags
+	字段设置为‘00’时，PES 包头中既无任何PTS 字段也无任何DTS 字段存在。值‘01’禁用。
+	**/
+	unsigned char  PTS_DTS_flags;
+	/*1 比特标志，置于‘1’时指示PES 包头中ESCR 基准字段和ESCR 扩展字段均存在。
+	置于‘0’时指示无任何ESCR 字段存在。
+	**/
+	unsigned char  ESCR_flag;
+	/*1 比特标志，置于‘1’时指示PES 包头中ES_rate 字段存在。置于‘0’时指示无任
+	何 ES_rate 字段存在。
+	**/
+	unsigned char  ES_rate_flag;
+	/*1 比特标志，置于‘1’时指示8 比特特技方式字段存在。置于‘0’时指示
+	此字段不存在。
+	**/
+	unsigned char  DSM_trick_mode_flag;
+
+	/*	1 比特标志，置于‘1’时指示additional_copy_info 存在。置于‘0’时指
+	示此字段不存在。
+	**/
+	unsigned char  additional_copy_info_flag;
+
+	/*1 比特标志，置于‘1’时指示PES 包中CRC 字段存在。置于‘0’时指示此字段不存
+	在。**/
+	unsigned char  PES_CRC_flag;
+
+	/*1 比特标志，置于‘1’时指示PES 包头中扩展字段存在。置于‘0’时指示此
+	字段不存在。**/
+	unsigned char  PES_extension_flag;
+	/*8比特字段指示在此PES包头中包含的由任选字段和任意填充字节所占据
+	的字节总数。任选字段的存在由前导 PES_header_data_length 字段的字节来指定。
+	**/
+	unsigned char  PES_header_data_length;
+
+	unsigned char  zero0010;    //0010
+	unsigned char  PTS3230;     //PTS [32..30]
+	unsigned char  marker_bit0;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned int   PTS2915;    //PTS [29..15]
+	unsigned char  marker_bit1;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned int   PTS1400;    //PTS [14..0]
+	unsigned char  marker_bit2;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned char  zero0011;    //0011
+	unsigned char  marker_bit3;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned char  marker_bit4;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned char  marker_bit5;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned char  zero0001;    //0001
+	unsigned char  DTS3230;     //DTS [32..30]
+	unsigned char  marker_bit6;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned int   DTS2915;    //DTS [29..15]
+	unsigned char  marker_bit7;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned int   DTS1400;    //DTS [14..0]
+	unsigned char  marker_bit8;//marker_bit 为1 比特字段，具有赋值‘1’
+
+	unsigned __int64 PTS;       //显示时间
+	unsigned __int64 DTS;       //解码时间
+	unsigned char    marker_bit;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned char    reserved;  //保留字段
+
+};
 class Anlysis
 {
 	ts_param*     m_param;         //配置参数信息
@@ -322,6 +455,7 @@ class Anlysis
 	TSPAT         m_pat;           //PAT数据
 	TSPMT         m_pmt;           //PMT数据
 	TSADT         m_adt;           //自适应字段数据
+	PES           m_pes;           //PES包头            
 
 	TsHeader      m_tsNewHeader;   //TS数据包头
 	TS            m_newTs;         //修正后TS数据
@@ -357,6 +491,9 @@ public:
 
 	/* 分析ts 自适应字段 */
 	void adaptation_field();
+
+	/* 分析ts PES包文件 */
+	void anlysisPES();
 
 	/* 分析ts文件 */
 	void anlysis();
