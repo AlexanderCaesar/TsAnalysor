@@ -4,6 +4,19 @@
 #include "ts.h"
 #include "tsfile.h"
 
+#define  PROGRAM_STREAM_MAP       0xBC
+#define  PRIVATE_STREAM1          0xBD
+#define  PADDING_STREAM           0xBE
+#define  PRIVATE_STREAM2          0xBF
+
+#define  ECM                      0xF0
+#define  EMM                      0xF1
+#define  DSMCC_STREAM             0xF2
+
+#define  H222_1_E                 0xF8
+
+#define  PROGRAM_STREAM_DIRECTORY 0xFF
+
 struct TS
 {
 	unsigned char data[188];//TS 数据包
@@ -288,10 +301,14 @@ struct TSADT
 	PCR_ base (i)给出，如公式2-2 中给出的。第二部分，program_clock_reference_extension 为9 比特字段，其
 	值由PCR_ext(i) 给出，如公式2-3 中给出的。PCR 指示包含program_clock_reference_base 最后比特的字节
 	到达系统目标解码器输入端的预期时间。
+	PCR(i) = PCR _ base(i)× 300 + PCR _ ext(i)
+	PCR_base(i) = ((system_clock_ fr equency × t(i))DIV 300) %233
+	PCR_ext(i) = ((system_clock_ frequency × t(i)) DIV 1)%300
 	**/
-	unsigned int  program_clock_reference_base;
-	unsigned char reverse0;//保留字段
-	unsigned int  program_clock_reference_extension;
+	unsigned __int64  program_clock_reference_base;
+	unsigned char     reverse0;//保留字段
+	unsigned __int64  program_clock_reference_extension;
+	unsigned __int64  PCR;
 
 	unsigned int  original_program_clock_reference_base;
 	unsigned char reverse1;//保留字段
@@ -323,7 +340,7 @@ struct PES
 	unsigned int   packet_start_code_prefix;//包起始码
 	/*节目流中，stream_id 指示基本流的类型和编号
 	Stream_id 注流 编 码
-	1011 1100 1 program_stream_map
+	1011 1100 1 program_stream_map  
 	1011 1101 2 private_stream_1
 	1011 1110   padding_stream
 	1011 1111 3 private_stream_2
@@ -421,28 +438,28 @@ struct PES
 	**/
 	unsigned char  PES_header_data_length;
 
-	unsigned char  zero0010;    //0010
-	unsigned char  PTS3230;     //PTS [32..30]
-	unsigned char  marker_bit0;//marker_bit 为1 比特字段，具有赋值‘1’
-	unsigned int   PTS2915;    //PTS [29..15]
-	unsigned char  marker_bit1;//marker_bit 为1 比特字段，具有赋值‘1’
-	unsigned int   PTS1400;    //PTS [14..0]
-	unsigned char  marker_bit2;//marker_bit 为1 比特字段，具有赋值‘1’
-	unsigned char  zero0011;    //0011
-	unsigned char  marker_bit3;//marker_bit 为1 比特字段，具有赋值‘1’
-	unsigned char  marker_bit4;//marker_bit 为1 比特字段，具有赋值‘1’
-	unsigned char  marker_bit5;//marker_bit 为1 比特字段，具有赋值‘1’
-	unsigned char  zero0001;    //0001
-	unsigned char  DTS3230;     //DTS [32..30]
-	unsigned char  marker_bit6;//marker_bit 为1 比特字段，具有赋值‘1’
-	unsigned int   DTS2915;    //DTS [29..15]
-	unsigned char  marker_bit7;//marker_bit 为1 比特字段，具有赋值‘1’
-	unsigned int   DTS1400;    //DTS [14..0]
-	unsigned char  marker_bit8;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned char    zero0010;   //0010
+	unsigned __int64 PTS3230;    //PTS [32..30]
+	unsigned char    marker_bit0;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned __int64 PTS2915;    //PTS [29..15]
+	unsigned char    marker_bit1;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned __int64 PTS1400;    //PTS [14..0]
+	unsigned char    marker_bit2;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned char    zero0011;   //0011
+	unsigned char    marker_bit3;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned char    marker_bit4;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned char    marker_bit5;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned char    zero0001;   //0001
+	unsigned __int64 DTS3230;    //DTS [32..30]
+	unsigned char    marker_bit6;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned __int64 DTS2915;    //DTS [29..15]
+	unsigned char    marker_bit7;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned __int64 DTS1400;    //DTS [14..0]
+	unsigned char    marker_bit8;//marker_bit 为1 比特字段，具有赋值‘1’
 
 	unsigned __int64 PTS;       //显示时间
 	unsigned __int64 DTS;       //解码时间
-	unsigned char    marker_bit;//marker_bit 为1 比特字段，具有赋值‘1’
+	unsigned char    marker_bit9;//marker_bit 为1 比特字段，具有赋值‘1’
 	unsigned char    reserved;  //保留字段
 
 };

@@ -238,6 +238,7 @@ void Anlysis::anlysisPAT()
 
 	if(m_param->b_ts)
 	{
+		fprintf(g_ts_ts,"pointer_field:%d\n",pointer_field);
 		fprintf(g_ts_ts,"PAT解析\n");
 		fprintf(g_ts_ts,"table_id:0x%X\n",m_pat.table_id);
 		fprintf(g_ts_ts,"section_syntax_indicator:%d\n",m_pat.section_syntax_indicator);
@@ -328,12 +329,13 @@ void Anlysis::anlysisPMT()
 	m_ts.count += 4;
 	if(m_param->b_ts)
 	{
+		fprintf(g_ts_ts,"pointer_field:%d\n",pointer_field);
 		fprintf(g_ts_ts,"PMT解析\n");
 		fprintf(g_ts_ts,"table_id:0x%X\n",m_pmt.table_id);
 		fprintf(g_ts_ts,"section_syntax_indicator:%d\n",m_pmt.section_syntax_indicator);
 		fprintf(g_ts_ts,"0:%d\n",m_pmt.zero0);
 		fprintf(g_ts_ts,"reserved:%d\n",m_pmt.reserved0);
-		fprintf(g_ts_ts,"ssection_length:%d\n",m_pmt.section_length);
+		fprintf(g_ts_ts,"section_length:%d\n",m_pmt.section_length);
 		fprintf(g_ts_ts,"program_number:%d\n",m_pmt.program_number);
 		fprintf(g_ts_ts,"reserved:%d\n",m_pmt.reserved1);
 		fprintf(g_ts_ts,"version_number:0x%X\n",m_pmt.version_number);
@@ -344,6 +346,7 @@ void Anlysis::anlysisPMT()
 		fprintf(g_ts_ts,"PCR_PID:0x%X\n",m_pmt.PCR_PID);
 		fprintf(g_ts_ts,"reserved:%d\n",m_pmt.reserved3);
 		fprintf(g_ts_ts,"program_info_length:%d\n",m_pmt.program_info_length);
+		fprintf(g_ts_ts,"m_pmt.N1:%d\n",m_pmt.N1);
 		for(int i = 0; i < m_pmt.N1; i++)
 		{
 			fprintf(g_ts_ts,"     stream_type:0x%X\n",m_pmt.stream_type[i]);
@@ -376,6 +379,7 @@ void Anlysis::adaptation_field()
 			m_adt.program_clock_reference_base     = (m_ts.data[m_ts.count]<<25) + (m_ts.data[m_ts.count+1]<<17) + (m_ts.data[m_ts.count+2]<<9) + (m_ts.data[m_ts.count+3]<<1) + ((m_ts.data[m_ts.count+4]&0x80)>>7) ;
 			m_adt.reverse0                         = ((m_ts.data[m_ts.count+4]&0x7E)>>1);
 			m_adt.program_clock_reference_extension= ((m_ts.data[m_ts.count+4]&0x01)<<8) + m_ts.data[m_ts.count+5];
+			m_adt.PCR = m_adt.program_clock_reference_base*300 + m_adt.program_clock_reference_extension;
 		}
 		if(m_adt.OPCR_flag)
 		{
@@ -411,6 +415,20 @@ void Anlysis::adaptation_field()
 			fprintf(g_ts_ts,"    splicing_point_flag:%d\n",m_adt.splicing_point_flag);
 			fprintf(g_ts_ts,"    transport_private_data_flag:%d\n",m_adt.transport_private_data_flag);
 			fprintf(g_ts_ts,"    adaptation_field_extension_flag:%d\n",m_adt.adaptation_field_extension_flag);
+			if(m_adt.PCR_flag)
+			{
+				fprintf(g_ts_ts,"        program_clock_reference_base:0x%X\n",m_adt.program_clock_reference_base);
+				fprintf(g_ts_ts,"        reverse:0x%X\n",m_adt.reverse0);
+				fprintf(g_ts_ts,"        program_clock_reference_extension:0x%X\n",m_adt.program_clock_reference_extension);
+				fprintf(g_ts_ts,"        PCR:%I64d  (",m_adt.PCR);
+				{
+					__int64 time = m_adt.program_clock_reference_base/90;//m_adt.program_clock_reference_base*300*1000/27000000; //毫秒
+					fprintf(g_ts_ts,"%I64d:",time/3600000);time = time%3600000;//时
+					fprintf(g_ts_ts,"%I64d:",time/60000);time = time%60000;//分
+					fprintf(g_ts_ts,"%I64d.",time/1000);time = time%1000;//秒
+					fprintf(g_ts_ts,"%I64d)\n",time);//毫秒
+				}
+			}
 		}
 	}
 }
@@ -419,11 +437,230 @@ void Anlysis::adaptation_field()
 void Anlysis::anlysisPES()
 {
 	m_pes.packet_start_code_prefix = (m_ts.data[m_ts.count]<<16) + (m_ts.data[m_ts.count+1]<<8) + m_ts.data[m_ts.count+2]; m_ts.count += 3;
+	m_pes.stream_id                = m_ts.data[m_ts.count++];
+	m_pes.PES_packet_length        =(m_ts.data[m_ts.count]<<8) + m_ts.data[m_ts.count+1];m_ts.count += 2;
+	if(m_pes.stream_id != PROGRAM_STREAM_MAP        //stream_id != program_stream_map
+		&&m_pes.stream_id != PADDING_STREAM          //&& stream_id != padding_stream
+		&&m_pes.stream_id != PRIVATE_STREAM2         //&& stream_id != private_stream_2
+		&&m_pes.stream_id != ECM                     //&& stream_id != ECM
+		&&m_pes.stream_id != EMM                     //&& stream_id != EMM
+		&&m_pes.stream_id != PROGRAM_STREAM_DIRECTORY//&& stream_id != program_stream_directory
+		&&m_pes.stream_id != DSMCC_STREAM            //&& stream_id != DSMCC_stream
+		&&m_pes.stream_id != H222_1_E)               //&& stream_id != ITU-T H.222.1 建议书类型E stream)
+	{
+		m_pes.onezero                  = (m_ts.data[m_ts.count]&0xC0)>>6;//为10
+		m_pes.PES_scrambling_control   = (m_ts.data[m_ts.count]&0x30)>>4;//一般为0
+		m_pes.PES_priority             = (m_ts.data[m_ts.count]&0x08)>>3;//一般为0
+		m_pes.data_alignment_indicator = (m_ts.data[m_ts.count]&0x04)>>2;//一般为0
+		m_pes.copyright                = (m_ts.data[m_ts.count]&0x02)>>1;//一般为0
+		m_pes.original_or_copy         = (m_ts.data[m_ts.count]&0x01)>>0;m_ts.count++;//一般为0
+		m_pes.PTS_DTS_flags            = (m_ts.data[m_ts.count]&0xC0)>>6;//一般为3 I帧P帧一般为3 需要DTS B部分不作参考的可以不打DTS
+		m_pes.ESCR_flag                = (m_ts.data[m_ts.count]&0x20)>>5;//一般为0
+		m_pes.ES_rate_flag             = (m_ts.data[m_ts.count]&0x10)>>4;//一般为0
+		m_pes.DSM_trick_mode_flag      = (m_ts.data[m_ts.count]&0x08)>>3;//一般为0
+		m_pes.additional_copy_info_flag= (m_ts.data[m_ts.count]&0x04)>>2;//一般为0
+		m_pes.PES_CRC_flag             = (m_ts.data[m_ts.count]&0x02)>>1;//一般为0
+		m_pes.PES_extension_flag       = (m_ts.data[m_ts.count]&0x01)>>0;m_ts.count++;//一般为0
+		m_pes.PES_header_data_length   = m_ts.data[m_ts.count++];
+		int pre_count = m_ts.count;//记录包头前位置
+		if(m_pes.PTS_DTS_flags==2)//只有PTS
+		{
+			m_pes.zero0010    = (m_ts.data[m_ts.count]&0xF0)>>4;//为0010
+			m_pes.PTS3230     = (m_ts.data[m_ts.count]&0x07)>>1;
+			m_pes.marker_bit0 = (m_ts.data[m_ts.count]&0x01)>>0;m_ts.count++;//1
+			m_pes.PTS2915     = (m_ts.data[m_ts.count]<<7) + ((m_ts.data[m_ts.count+1]&0xFE)>>1); m_ts.count ++;
+			m_pes.marker_bit1 = (m_ts.data[m_ts.count]&0x01)>>0;m_ts.count++;//1
+			m_pes.PTS1400     = (m_ts.data[m_ts.count]<<7) + ((m_ts.data[m_ts.count+1]&0xFE)>>1); m_ts.count ++;
+			m_pes.marker_bit2 = (m_ts.data[m_ts.count]&0x01)>>0;m_ts.count++;//1
+			m_pes.PTS         = (m_pes.PTS3230<<30) + (m_pes.PTS2915<<15) + m_pes.PTS1400;
+		}
+		if(m_pes.PTS_DTS_flags==3)// PTS DTS
+		{
+			m_pes.zero0011    = (m_ts.data[m_ts.count]&0xF0)>>4;//为0011
+			m_pes.PTS3230     = (m_ts.data[m_ts.count]&0x07)>>1;
+			m_pes.marker_bit3 = (m_ts.data[m_ts.count]&0x01)>>0;m_ts.count++;//1
+			m_pes.PTS2915     = (m_ts.data[m_ts.count]<<7) + ((m_ts.data[m_ts.count+1]&0xFE)>>1); m_ts.count ++;
+			m_pes.marker_bit4 = (m_ts.data[m_ts.count]&0x01)>>0;m_ts.count++;//1
+			m_pes.PTS1400     = (m_ts.data[m_ts.count]<<7) + ((m_ts.data[m_ts.count+1]&0xFE)>>1); m_ts.count ++;
+			m_pes.marker_bit5 = (m_ts.data[m_ts.count]&0x01)>>0;m_ts.count++;//1
+			m_pes.PTS         = (m_pes.PTS3230<<30) + (m_pes.PTS2915<<15) + m_pes.PTS1400;
 
+			m_pes.zero0001    = (m_ts.data[m_ts.count]&0xF0)>>4;//为0001
+			m_pes.DTS3230     = (m_ts.data[m_ts.count]&0x07)>>1;
+			m_pes.marker_bit6 = (m_ts.data[m_ts.count]&0x01)>>0;m_ts.count++;//1
+			m_pes.DTS2915     = (m_ts.data[m_ts.count]<<7) + ((m_ts.data[m_ts.count+1]&0xFE)>>1); m_ts.count ++;
+			m_pes.marker_bit7 = (m_ts.data[m_ts.count]&0x01)>>0;m_ts.count++;//1
+			m_pes.DTS1400     = (m_ts.data[m_ts.count]<<7) + ((m_ts.data[m_ts.count+1]&0xFE)>>1); m_ts.count ++;
+			m_pes.marker_bit8 = (m_ts.data[m_ts.count]&0x01)>>0;m_ts.count++;//1
+			m_pes.DTS         = (m_pes.DTS3230<<30) + (m_pes.DTS2915<<15) + m_pes.DTS1400;
+		}
+		if (m_pes.ESCR_flag)
+		{
+			//待添加
+		}
+		if (m_pes.ES_rate_flag)
+		{
+			//待添加
+		}
+		if (m_pes.DSM_trick_mode_flag)
+		{
+			//待添加
+		}
+		if (m_pes.additional_copy_info_flag)
+		{
+			//待添加
+		}
+		if (m_pes.PES_CRC_flag)
+		{
+			//待添加
+		}
+		if (m_pes.PES_extension_flag)
+		{
+			//待添加
+		}
+		m_ts.count = pre_count + m_pes.PES_header_data_length;
+	}
+	else if(m_pes.stream_id == PROGRAM_STREAM_MAP     //stream_id == program_stream_map
+		||m_pes.stream_id == PRIVATE_STREAM2          //|| stream_id == private_stream_2
+		||m_pes.stream_id == ECM                      //|| stream_id == ECM
+		||m_pes.stream_id == EMM                      //|| stream_id == EMM
+		||m_pes.stream_id == PROGRAM_STREAM_DIRECTORY //|| stream_id == program_stream_directory
+		||m_pes.stream_id == DSMCC_STREAM             //|| stream_id == DSMCC_stream
+		||m_pes.stream_id == H222_1_E)                //|| stream_id == ITU-T H.222.1 建议书类型E stream )
+	{
+		m_ts.count += m_pes.PES_packet_length;
+		//待添加
+	}
+	else if (m_pes.stream_id == PADDING_STREAM)
+	{
+		m_ts.count += m_pes.PES_packet_length;
+		//待添加
+	}
 	if(m_param->b_ts)
 	{
 		fprintf(g_ts_ts,"PES包头解析\n");
 		fprintf(g_ts_ts,"packet_start_code_prefix:%d\n",m_pes.packet_start_code_prefix);
+		fprintf(g_ts_ts,"stream_id:0x%X\n",m_pes.stream_id);
+		fprintf(g_ts_ts,"PES_packet_length:%d\n",m_pes.PES_packet_length);
+		if(m_pes.stream_id != PROGRAM_STREAM_MAP        //stream_id != program_stream_map
+			&&m_pes.stream_id != PADDING_STREAM          //&& stream_id != padding_stream
+			&&m_pes.stream_id != PRIVATE_STREAM2         //&& stream_id != private_stream_2
+			&&m_pes.stream_id != ECM                     //&& stream_id != ECM
+			&&m_pes.stream_id != EMM                     //&& stream_id != EMM
+			&&m_pes.stream_id != PROGRAM_STREAM_DIRECTORY//&& stream_id != program_stream_directory
+			&&m_pes.stream_id != DSMCC_STREAM            //&& stream_id != DSMCC_stream
+			&&m_pes.stream_id != H222_1_E)               //&& stream_id != ITU-T H.222.1 建议书类型E stream)
+		{
+			fprintf(g_ts_ts,"    10:0x%X\n",m_pes.onezero);
+			fprintf(g_ts_ts,"    PES_scrambling_control:%d\n",m_pes.PES_scrambling_control);
+			fprintf(g_ts_ts,"    PES_priority :%d\n",m_pes.PES_priority );
+			fprintf(g_ts_ts,"    data_alignment_indicator:%d\n",m_pes.data_alignment_indicator);
+			fprintf(g_ts_ts,"    copyright:%d\n",m_pes.copyright);
+			fprintf(g_ts_ts,"    original_or_copy:%d\n",m_pes.original_or_copy);
+			fprintf(g_ts_ts,"    PTS_DTS_flags:%d\n",m_pes.PTS_DTS_flags);
+			fprintf(g_ts_ts,"    ESCR_flag:%d\n",m_pes.ESCR_flag);
+			fprintf(g_ts_ts,"    ES_rate_flag:%d\n",m_pes.ES_rate_flag);
+			fprintf(g_ts_ts,"    DSM_trick_mode_flag:%d\n",m_pes.DSM_trick_mode_flag);
+			fprintf(g_ts_ts,"    additional_copy_info_flag:%d\n",m_pes.additional_copy_info_flag);
+			fprintf(g_ts_ts,"    PES_CRC_flag:%d\n",m_pes.PES_CRC_flag);
+			fprintf(g_ts_ts,"    PES_extension_flag:%d\n",m_pes.PES_extension_flag);
+			fprintf(g_ts_ts,"    PES_header_data_length:%d\n",m_pes.PES_header_data_length);
+
+			if(m_pes.PTS_DTS_flags==2)//只有PTS
+			{
+				fprintf(g_ts_ts,"    0010:0x%X\n",m_pes.zero0010);
+				fprintf(g_ts_ts,"    PTS[32...30]:%I64d\n",m_pes.PTS3230);
+				fprintf(g_ts_ts,"    marker_bit:%d\n",m_pes.marker_bit0);
+				fprintf(g_ts_ts,"    PTS[29...15]:%I64d\n",m_pes.PTS2915);
+				fprintf(g_ts_ts,"    marker_bit:%d\n",m_pes.marker_bit1);
+				fprintf(g_ts_ts,"    PTS[14...00]:%I64d\n",m_pes.PTS1400);
+				fprintf(g_ts_ts,"    marker_bit:%d\n",m_pes.marker_bit2);
+				fprintf(g_ts_ts,"    PTS:%I64d (",m_pes.PTS);
+				{
+					__int64 time = m_pes.PTS/90;//m_pes.PTS*300*1000/27000000; //毫秒
+					fprintf(g_ts_ts,"%I64d:",time/3600000);time = time%3600000;//时
+					fprintf(g_ts_ts,"%I64d:",time/60000);time = time%60000;//分
+					fprintf(g_ts_ts,"%I64d.",time/1000);time = time%1000;//秒
+					fprintf(g_ts_ts,"%I64d)\n",time);//毫秒
+				}
+			}
+			if(m_pes.PTS_DTS_flags==3)// PTS DTS
+			{
+				fprintf(g_ts_ts,"    0011:0x%X\n",m_pes.zero0011);
+				fprintf(g_ts_ts,"    PTS[32...30]:%I64d\n",m_pes.PTS3230);
+				fprintf(g_ts_ts,"    marker_bit:%d\n",m_pes.marker_bit0);
+				fprintf(g_ts_ts,"    PTS[29...15]:%I64d\n",m_pes.PTS2915);
+				fprintf(g_ts_ts,"    marker_bit:%d\n",m_pes.marker_bit1);
+				fprintf(g_ts_ts,"    PTS[14...00]:%I64d\n",m_pes.PTS1400);
+				fprintf(g_ts_ts,"    marker_bit:%d\n",m_pes.marker_bit2);
+				fprintf(g_ts_ts,"    PTS:%I64d\n",m_pes.PTS);
+
+				fprintf(g_ts_ts,"    0001:0x%X\n",m_pes.zero0001);
+				fprintf(g_ts_ts,"    DTS[32...30]:%I64d\n",m_pes.DTS3230);
+				fprintf(g_ts_ts,"    marker_bit:%d\n",m_pes.marker_bit0);
+				fprintf(g_ts_ts,"    DTS[29...15]:%I64d\n",m_pes.DTS2915);
+				fprintf(g_ts_ts,"    marker_bit:%d\n",m_pes.marker_bit1);
+				fprintf(g_ts_ts,"    DTS[14...00]:%I64d\n",m_pes.DTS1400);
+				fprintf(g_ts_ts,"    marker_bit:%d\n",m_pes.marker_bit2);
+
+				fprintf(g_ts_ts,"    PTS:%I64d (",m_pes.PTS);
+				{
+					__int64 time = m_pes.PTS/90;//m_pes.PTS*300*1000/27000000; //毫秒
+					fprintf(g_ts_ts,"%I64d:",time/3600000);time = time%3600000;//时
+					fprintf(g_ts_ts,"%I64d:",time/60000);time = time%60000;//分
+					fprintf(g_ts_ts,"%I64d.",time/1000);time = time%1000;//秒
+					fprintf(g_ts_ts,"%I64d)\n",time);//毫秒
+				}
+				fprintf(g_ts_ts,"    DTS:%I64d (",m_pes.DTS);
+				{
+					__int64 time = m_pes.DTS/90;//m_pes.PTS*300*1000/27000000; //毫秒
+					fprintf(g_ts_ts,"%I64d:",time/3600000);time = time%3600000;//时
+					fprintf(g_ts_ts,"%I64d:",time/60000);time = time%60000;//分
+					fprintf(g_ts_ts,"%I64d.",time/1000);time = time%1000;//秒
+					fprintf(g_ts_ts,"%I64d)\n",time);//毫秒
+				}
+
+			}
+			if (m_pes.ESCR_flag)
+			{
+				//待添加
+			}
+			if (m_pes.ES_rate_flag)
+			{
+				//待添加
+			}
+			if (m_pes.DSM_trick_mode_flag)
+			{
+				//待添加
+			}
+			if (m_pes.additional_copy_info_flag)
+			{
+				//待添加
+			}
+			if (m_pes.PES_CRC_flag)
+			{
+				//待添加
+			}
+			if (m_pes.PES_extension_flag)
+			{
+				//待添加
+			}
+		}
+		else if(m_pes.stream_id == PROGRAM_STREAM_MAP     //stream_id == program_stream_map
+			||m_pes.stream_id == PRIVATE_STREAM2          //|| stream_id == private_stream_2
+			||m_pes.stream_id == ECM                      //|| stream_id == ECM
+			||m_pes.stream_id == EMM                      //|| stream_id == EMM
+			||m_pes.stream_id == PROGRAM_STREAM_DIRECTORY //|| stream_id == program_stream_directory
+			||m_pes.stream_id == DSMCC_STREAM             //|| stream_id == DSMCC_stream
+			||m_pes.stream_id == H222_1_E)                //|| stream_id == ITU-T H.222.1 建议书类型E stream )
+		{
+			//待添加
+		}
+		else if (m_pes.stream_id == PADDING_STREAM)
+		{
+			//待添加
+		}
+		
 	}
 }
 
@@ -446,6 +683,12 @@ void Anlysis::anlysis()
 			break;
 		}
 
+		
+		if(m_tsHeader.adaptation_field_control == 2 || m_tsHeader.adaptation_field_control == 3)//自适应字段解析
+		{
+			adaptation_field();
+		}
+
 		if(m_tsHeader.PID != m_PATPID && m_tsHeader.PID != m_PMTPID && m_tsHeader.PID != m_AudioPID && m_tsHeader.PID != m_VideoPID )//未知PID待解析
 		{
 			//待添加
@@ -456,11 +699,7 @@ void Anlysis::anlysis()
 			m_tsConter++;
 			continue;
 		}
-		
-		if(m_tsHeader.adaptation_field_control == 2 || m_tsHeader.adaptation_field_control == 3)//自适应字段解析
-		{
-			adaptation_field();
-		}
+
 		if(m_tsHeader.adaptation_field_control == 1 || m_tsHeader.adaptation_field_control == 3)//基本数据
 		{
 			if(m_tsHeader.PID == m_PATPID) //解析PAT
@@ -476,6 +715,10 @@ void Anlysis::anlysis()
 				unsigned int packet_start_code_prefix = (m_ts.data[m_ts.count]<<16) + (m_ts.data[m_ts.count+1]<<8) + m_ts.data[m_ts.count+2];
 				if(packet_start_code_prefix == 0x000001)
 					anlysisPES();
+				if(m_param->b_video)
+				{
+					fwrite(m_ts.data+m_ts.count,1,188-m_ts.count,g_ts_video);
+				}
 			}
 			else if(m_tsHeader.PID == m_AudioPID)//解析音频
 			{
