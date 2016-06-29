@@ -4,7 +4,7 @@
 
 typedef struct ts_param
 {
-    /* ÅäÖÃÐÅÏ¢
+    /* ÅäÖÃÐÅÏ¢ 
     -i ÅäÖÃ Èç£º-i brazil-bq.ts
     -t ÅäÖÃ Èç£º-t brazil-bq.log
     -v ÅäÖÃ Èç£º-v brazil-bq.264
