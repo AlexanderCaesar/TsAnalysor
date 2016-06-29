@@ -82,6 +82,117 @@ struct TsHeader
 	unsigned char  continuity_counter;         //随着具有相同PID 的每个传输流包而增加。
 };
 
+struct Service_Descriptor
+{
+	unsigned char descriptor_tag;    // 此字段必须为0x48
+	unsigned char descriptor_length; // 描述字段长度
+	/*
+	service_type Description
+	0x00 reserved for future use
+	0x01 digital television service (see note 1)
+	0x02 digital radio sound service (see note 2)
+	0x03 Teletext service
+	0x04 NVOD reference service (see note 1)
+	0x05 NVOD time-shifted service (see note 1)
+	0x06 mosaic service
+	0x07 reserved for future use
+	0x08 reserved for future use
+	0x09 reserved for future use
+	0x0A advanced codec digital radio sound service
+	0x0B advanced codec mosaic service
+	0x0C data broadcast service
+	0x0D reserved for Common Interface Usage (EN 50221 [39])
+	0x0E RCS Map (see EN 301 790 [7])
+	0x0F RCS FLS (see EN 301 790 [7])
+	0x10 DVB MHP service
+	0x11 MPEG-2 HD digital television service
+	0x12 to 0x15 reserved for future use
+	0x16 advanced codec SD digital television service
+	0x17 advanced codec SD NVOD time-shifted service
+	0x18 advanced codec SD NVOD reference service
+	0x19 advanced codec HD digital television service
+	0x1A advanced codec HD NVOD time-shifted service
+	0x1B advanced codec HD NVOD reference service
+	0x1C to 0x7F reserved for future use
+	0x80 to 0xFE user defined
+	0xFF reserved for future use
+	NOTE 1: MPEG-2 SD material should use this type.
+	NOTE 2: MPEG-1 Layer 2 audio material should use this type.
+	**/
+	unsigned char service_type;      //服务类型
+	unsigned char service_provider_name_length; //服务提供名称的长度
+	unsigned char service_provider_name[258];   //服务提供商名称
+	unsigned char service_name_length;          //服务名称长度
+	unsigned char service_name[258];            //服务名
+};
+
+/*
+非必要信息
+SDT, Service description section,服务描述段
+SDT可以提供的信息包括:
+(1) 该节目是否在播放中
+(2) 该节目是否被加密
+(3) 该节目的名称
+**/
+struct TSSDT
+{
+	/*table_id 字段标识传输流PSI 分段的内容
+	0x00 program_association_section（PAT）
+	0x01 conditional_access_section (CA_section)
+	0x02 TS_program_map_section PMT
+	0x03 TS_description_section
+	0x04 ISO_IEC_14496_scene_description_section
+	0x05 ISO_IEC_14496_object_descriptor_section
+	0x06 Metadata_section
+	0x07 IPMP_Control_Information_section (defined in ISO/IEC 13818-11)
+	0x08-0x3F ITU-T H.222.0 建议书 | ISO/IEC 13818-1 保留
+	0x40-0xFE 用户专用
+	0xFF 禁用 **/
+	unsigned char  table_id;                //可以是0x42,表示描述的是当前流的信息,也可以是0x46,表示是其他流的信息(EPG使用此参数)
+	unsigned char  section_syntax_indicator;//section_syntax_indicator 为1 比特字段，应设置为‘1’。
+	unsigned char  reserved_future_use0;     //保留字段
+	unsigned char  reserved0;               //保留字段
+	/*此为12 比特字段，该字段的头两比特必为‘00’，剩余10 比特指定该分段的字节数，
+	  紧随分段长度字段开始，并包括CRC。此字段中，该值应不超过1021（0x3FD）。**/
+	unsigned int   section_length;          //长度
+	unsigned int   transport_stream_id;     //此为16 比特字段，该字段充当标签，标识网络内此传输流有别于任何其他多路复用流。其值由用户规定。
+	unsigned char  reserved1;               //保留字段
+	/*此5 比特字段为整个节目相关表的版本号。当节目相关表的定义改变时，版本号
+	应增1 模32。current_next_indicator 设置为‘1’时，version_number 必须为当前有效的节目相关表的版本号。
+	current_next_indicator 设置为‘0’时，version_number 必须为下一个有效的节目相关表的版本号。	**/
+	unsigned char  version_number;          //版本号
+	/*1 比特指示符，置于‘1’时指示发送的节目相关表为当前有效的。该比特
+	设置为‘0’时，它指示发送的该表尚未有效并且下一个表将生效	**/
+	unsigned char  current_next_indicator;  //生效位 表示当前马上使用. original_netword_id:16bits的原始网络ID号
+	/*此8 比特字段给出此分段的编号。节目相关表中首分段的section_number 
+	必须为	0x00。随着节目相关表中每个增加的分段它应增1。**/
+	unsigned char  section_number;          //分段号
+	/*此8比特字段指定完整节目相关表的最后分段编号（即具有最高section_number
+	的分段）。	**/
+	unsigned char  last_section_number;     //最后分段号
+	unsigned int   original_network_id;     //This 16-bit field gives the label identifying the network_id of the originating delivery system.
+	unsigned char  reserved_future_use1;    //保留字段
+	unsigned char  N;                       //计数服务个数
+
+	/* Program_number 为16 比特字段。它指定program_map_PID 所适用的节目。置于
+	0x0000 时，后随的PID 参考必为网络PID。对于所有其他情况，此字段的值由用户规定。
+	在节目相关表的	一个版本内，此字段应不只一次地取任何非单一值。
+	注 — 例如，可以把 program_number 用做为广播信道的标识。**/
+	unsigned int  service_id[12];          //16 bits的服务器ID,实际上就是PMT段中的program_numbe
+	unsigned char reserved_future_useN[12];//保留字段
+	unsigned char EIT_schedule_flag[12];       //1bit的EIT信息,1表示当前流实现了该节目的EIT传送 EIT_present_following_flag:1bits的EIT信息,1表示当前流实现了该节目的EIT传送 
+	unsigned char EIT_present_following_flag[12];//
+	unsigned char running_status[12];            //3bits的运行状态信息:1-还未播放2-几分钟后马上开始,3-被暂停播出,4-正在播放,其他---保留
+	unsigned char free_CA_mode[12];              //1bits的加密信息,''1''表示该节目被加密. 紧 接着的是描述符,一般是Service descriptor,分析此描述符可以获取servive_id指定的节目的节目名称.具体格式请参考 EN300468中的Service descriptor部分.
+	unsigned char descriptors_loop_length[12];   //描述信息长度
+	unsigned char descriptor_tag[12];                // 描述类型
+
+	Service_Descriptor service_descriptor[12];       //服务描述
+
+	/*此为32 比特字段，包含处理全部节目相关分段后**/
+	unsigned int  CRC_32;                      //CRC
+};
+
 struct TSPAT
 {
 	/*table_id 字段标识传输流PSI 分段的内容
@@ -469,6 +580,7 @@ class Anlysis
 
 	TS            m_ts;            //TS数据
 	TsHeader      m_tsHeader;      //TS数据包头
+	TSSDT         m_sdt;           //SDT数据
 	TSPAT         m_pat;           //PAT数据
 	TSPMT         m_pmt;           //PMT数据
 	TSADT         m_adt;           //自适应字段数据
@@ -499,6 +611,9 @@ public:
 	
 	/* 分析ts Header文件 */
 	bool anlysisTsHeader();
+
+	/* 分析ts SDT文件 */
+	void anlysisSDT();
 
 	/* 分析ts PAT文件 */
 	void anlysisPAT();

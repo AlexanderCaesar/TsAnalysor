@@ -189,6 +189,180 @@ bool Anlysis::anlysisTsHeader()
 	}	
 }
 
+/* 分析ts SDT文件 */
+void Anlysis::anlysisSDT()
+{
+	pointer_field                  = m_ts.data[m_ts.count++];//读取指针
+	m_ts.count                    += pointer_field;          //偏移到PAT位置
+
+	m_sdt.table_id                 = m_ts.data[m_ts.count++];
+	m_sdt.section_syntax_indicator = (m_ts.data[m_ts.count]&0x80)>>7;
+	m_sdt.reserved_future_use0     = (m_ts.data[m_ts.count]&0x40)>>6;
+	m_sdt.reserved0                = (m_ts.data[m_ts.count]&0x30)>>4;
+	m_sdt.section_length           = ((m_ts.data[m_ts.count]&0x0F)<<8) + m_ts.data[m_ts.count+1]; m_ts.count += 2;
+	m_sdt.transport_stream_id      = (m_ts.data[m_ts.count]<<8) + m_ts.data[m_ts.count+1];m_ts.count += 2;
+	m_sdt.reserved1                = (m_ts.data[m_ts.count]&0xC0)>>6;
+	m_sdt.version_number           = (m_ts.data[m_ts.count]&0x1E)>>1;
+	m_sdt.current_next_indicator   = m_ts.data[m_ts.count++]&0x01;
+	m_sdt.section_number           = m_ts.data[m_ts.count++];
+	m_sdt.last_section_number      = m_ts.data[m_ts.count++];
+	m_sdt.original_network_id      = (m_ts.data[m_ts.count]<<8) + m_ts.data[m_ts.count+1];m_ts.count += 2;
+	m_sdt.reserved_future_use1     = m_ts.data[m_ts.count++];
+
+	int length = m_sdt.section_length - 8;//8指的是前面占用的字节
+
+	m_sdt.N = 0;
+	while(length > 4)
+	{
+		m_sdt.service_id[m_sdt.N]                  = (m_ts.data[m_ts.count]<<8) + m_ts.data[m_ts.count+1];m_ts.count += 2;
+		m_sdt.reserved_future_useN[m_sdt.N]        = m_ts.data[m_ts.count]>>2;
+		m_sdt.EIT_schedule_flag[m_sdt.N]           = (m_ts.data[m_ts.count]&0x02)>>1;
+		m_sdt.EIT_present_following_flag[m_sdt.N]  = (m_ts.data[m_ts.count]&0x01)>>0;m_ts.count++;
+		m_sdt.running_status[m_sdt.N]              = m_ts.data[m_ts.count]>>5;
+		m_sdt.free_CA_mode[m_sdt.N]                = (m_ts.data[m_ts.count]&0x10)>>4;
+		m_sdt.descriptors_loop_length[m_sdt.N]     = ((m_ts.data[m_ts.count]&0x0F)<<8) + m_ts.data[m_ts.count+1];m_ts.count += 2;
+
+		m_sdt.descriptor_tag[m_sdt.N]              = m_ts.data[m_ts.count];
+		if(m_sdt.descriptor_tag[m_sdt.N] == 0x48)
+		{
+			m_sdt.service_descriptor[m_sdt.N].descriptor_tag              = m_ts.data[m_ts.count++];
+			m_sdt.service_descriptor[m_sdt.N].descriptor_length            = m_ts.data[m_ts.count++];
+			m_sdt.service_descriptor[m_sdt.N].service_type                 = m_ts.data[m_ts.count++];
+			m_sdt.service_descriptor[m_sdt.N].service_provider_name_length = m_ts.data[m_ts.count++];
+			for(int i = 0; i<m_sdt.service_descriptor[m_sdt.N].service_provider_name_length; i++)
+			{
+				m_sdt.service_descriptor[m_sdt.N].service_provider_name[i] = m_ts.data[m_ts.count++];
+			}
+			m_sdt.service_descriptor[m_sdt.N].service_provider_name[m_sdt.service_descriptor[m_sdt.N].service_provider_name_length] = '\0';
+			m_sdt.service_descriptor[m_sdt.N].service_name_length = m_ts.data[m_ts.count++];
+			for(int i = 0; i<m_sdt.service_descriptor[m_sdt.N].service_name_length; i++)
+			{
+				m_sdt.service_descriptor[m_sdt.N].service_name[i] = m_ts.data[m_ts.count++];
+			}
+			m_sdt.service_descriptor[m_sdt.N].service_name[m_sdt.service_descriptor[m_sdt.N].service_name_length] = '\0';
+
+		}
+		else
+		{
+			//descriptor() 待添加
+			m_ts.count += m_sdt.descriptors_loop_length[m_sdt.N];
+		}
+		
+
+		length = length -5 - m_sdt.descriptors_loop_length[m_sdt.N];
+		m_sdt.N++;
+	}
+
+	m_sdt.CRC_32 = (m_ts.data[m_ts.count]<<24) + (m_ts.data[m_ts.count+1]<<16) + (m_ts.data[m_ts.count+2]<<8) + m_ts.data[m_ts.count+3];
+	m_ts.count += 4;
+
+	/*验证CRC*/
+	unsigned len = m_ts.count -5;  //PAT长度
+	unsigned char *buf = m_ts.data + 5;//PAT位置
+	unsigned int crc = getCRC(av_crc(av_crc_table,-1,buf,len-4));
+	/*写CRC方法
+	buf[len - 4] = (crc >> 24) & 0xff;
+	buf[len - 3] = (crc >> 16) & 0xff;
+	buf[len - 2] = (crc >>  8) & 0xff;
+	buf[len - 1] =  crc        & 0xff;
+	*/
+
+	if(m_param->b_ts)
+	{
+		fprintf(g_ts_ts,"pointer_field:%d\n",pointer_field);
+		fprintf(g_ts_ts,"SDT解析\n");
+		fprintf(g_ts_ts,"table_id:0x%X\n",m_sdt.table_id);
+		fprintf(g_ts_ts,"section_syntax_indicator:%d\n",m_sdt.section_syntax_indicator);
+		fprintf(g_ts_ts,"reserved_future_use:%d\n",m_sdt.reserved_future_use0);
+		fprintf(g_ts_ts,"reserved:%d\n",m_sdt.reserved0);
+		fprintf(g_ts_ts,"section_length:%d\n",m_sdt.section_length);
+		fprintf(g_ts_ts,"transport_stream_id:%d\n",m_sdt.transport_stream_id );
+		fprintf(g_ts_ts,"reserved1:%d\n",m_sdt.reserved1);
+		fprintf(g_ts_ts,"version_number:%d\n",m_sdt.version_number);
+		fprintf(g_ts_ts,"current_next_indicator:%d\n",m_sdt.current_next_indicator);
+		fprintf(g_ts_ts,"section_number:%d\n",m_sdt.section_number);
+		fprintf(g_ts_ts,"last_section_number:%d\n",m_sdt.last_section_number);
+		fprintf(g_ts_ts,"original_network_id:%d\n",m_sdt.original_network_id);
+		fprintf(g_ts_ts,"reserved_future_use1:%d\n",m_sdt.reserved_future_use1);
+		fprintf(g_ts_ts,"N:%d\n",m_sdt.N);
+		for(int i = 0; i < m_sdt.N; i++)
+		{
+			fprintf(g_ts_ts,"   service_id:0x%X\n",m_sdt.service_id[i]);
+			fprintf(g_ts_ts,"   reserved_future_use:0x%X\n",m_sdt.reserved_future_useN[i]);
+			fprintf(g_ts_ts,"   EIT_schedule_flag:0x%X\n",m_sdt.EIT_schedule_flag[i]);
+			fprintf(g_ts_ts,"   EIT_present_following_flag:0x%X\n",m_sdt.EIT_present_following_flag[i]);
+			fprintf(g_ts_ts,"   running_status:0x%X\n",m_sdt.running_status[i]);
+			fprintf(g_ts_ts,"   free_CA_mode:0x%X\n",m_sdt.free_CA_mode[i]);
+			fprintf(g_ts_ts,"   descriptors_loop_length:%d\n",m_sdt.descriptors_loop_length[i]);
+
+			if(m_sdt.descriptor_tag[i] == 0x48)
+			{
+				fprintf(g_ts_ts,"          descriptor_tag:%d\n",m_sdt.service_descriptor[i].descriptor_tag);
+				fprintf(g_ts_ts,"          descriptor_length:%d\n",m_sdt.service_descriptor[i].descriptor_length);
+				fprintf(g_ts_ts,"          service_type:%d  ",m_sdt.service_descriptor[i].service_type);
+				switch(m_sdt.service_descriptor[i].service_type)
+				{
+				case 0x00:fprintf(g_ts_ts,"reserved for future use\n");break;
+				case 0x01:fprintf(g_ts_ts,"digital television service (see note 1)\n");break;
+				case 0x02:fprintf(g_ts_ts,"digital radio sound service (see note 2)\n");break;
+				case 0x03:fprintf(g_ts_ts,"Teletext service\n");break;
+				case 0x04:fprintf(g_ts_ts,"NVOD reference service (see note 1)\n");break;
+				case 0x05:fprintf(g_ts_ts,"NVOD time-shifted service (see note 1)\n");break;
+				case 0x06:fprintf(g_ts_ts,"mosaic service\n");break;
+				case 0x07:fprintf(g_ts_ts,"reserved for future use\n");break;
+				case 0x08:fprintf(g_ts_ts,"reserved for future use\n");break;
+				case 0x09:fprintf(g_ts_ts,"reserved for future use\n");break;
+				case 0x0A:fprintf(g_ts_ts,"advanced codec digital radio sound service\n");break;
+				case 0x0B:fprintf(g_ts_ts,"advanced codec mosaic service\n");break;
+				case 0x0C:fprintf(g_ts_ts,"data broadcast service\n");break;
+				case 0x0D:fprintf(g_ts_ts,"reserved for Common Interface Usage (EN 50221 [39])\n");break;
+				case 0x0E:fprintf(g_ts_ts,"RCS Map (see EN 301 790 [7])\n");break;
+				case 0x0F:fprintf(g_ts_ts,"RCS FLS (see EN 301 790 [7])\n");break;
+				case 0x10:fprintf(g_ts_ts,"DVB MHP service\n");break;
+				case 0x11:fprintf(g_ts_ts,"MPEG-2 HD digital television service\n");break;
+
+				case 0x16:fprintf(g_ts_ts,"advanced codec SD digital television service\n");break;
+				case 0x17:fprintf(g_ts_ts,"advanced codec SD NVOD time-shifted service\n");break;
+				case 0x18:fprintf(g_ts_ts,"advanced codec SD NVOD reference service\n");break;
+				case 0x19:fprintf(g_ts_ts,"advanced codec HD digital television service\n");break;
+				case 0x1A:fprintf(g_ts_ts,"advanced codec HD NVOD time-shifted service\n");break;
+				case 0x1B:fprintf(g_ts_ts,"advanced codec HD NVOD reference service\n");break;
+
+				case 0xFF:fprintf(g_ts_ts,"reserved for future use\n");break;
+				default:
+					{
+						if(m_sdt.service_descriptor[i].service_type>=0x12 && m_sdt.service_descriptor[i].service_type <= 0x15)
+						{
+							fprintf(g_ts_ts,"reserved for future use\n");
+						}
+						else if(m_sdt.service_descriptor[i].service_type>=0x1C && m_sdt.service_descriptor[i].service_type <= 0x7F)
+						{
+							fprintf(g_ts_ts,"reserved for future use\n");break;
+						}
+						else
+						{
+							fprintf(g_ts_ts,"user defined\n");
+						}
+					}
+				}
+				fprintf(g_ts_ts,"          service_provider_name_length:%d\n",m_sdt.service_descriptor[i].service_provider_name_length);
+				fprintf(g_ts_ts,"          %s\n",m_sdt.service_descriptor[i].service_provider_name);
+				fprintf(g_ts_ts,"          service_name_length:%d\n",m_sdt.service_descriptor[i].service_name_length);
+				fprintf(g_ts_ts,"          %s\n",m_sdt.service_descriptor[i].service_name);
+			}
+			else
+			{
+				//descriptor() 待添加
+			}
+		}		
+		fprintf(g_ts_ts,"CRC_32:0x%X\n",m_sdt.CRC_32);
+		if(crc!=m_sdt.CRC_32)
+		{
+			fprintf(g_ts_ts,"error:CRC校验错误:0x%X  0x%X \n",m_sdt.CRC_32,crc);g_errors++;
+		}
+	}
+}
+
 /* 分析ts PAT文件 */
 void Anlysis::anlysisPAT()
 {
@@ -267,6 +441,10 @@ void Anlysis::anlysisPAT()
 		}
 		
 		fprintf(g_ts_ts,"CRC_32:0x%X\n",m_pat.CRC_32);
+		if(crc!=m_pat.CRC_32)
+		{
+			fprintf(g_ts_ts,"error:CRC校验错误:0x%X  0x%X \n",m_pat.CRC_32,crc);g_errors++;
+		}
 	}
 }
 
@@ -325,8 +503,14 @@ void Anlysis::anlysisPMT()
 		m_pmt.N1++;
 	}
 
-	m_pat.CRC_32 = (m_ts.data[m_ts.count]<<24) + (m_ts.data[m_ts.count+1]<<16) + (m_ts.data[m_ts.count+2]<<8) + m_ts.data[m_ts.count+3];
+	m_pmt.CRC_32 = (m_ts.data[m_ts.count]<<24) + (m_ts.data[m_ts.count+1]<<16) + (m_ts.data[m_ts.count+2]<<8) + m_ts.data[m_ts.count+3];
 	m_ts.count += 4;
+
+	/*验证CRC*/
+	unsigned len = m_ts.count -5;  //PAT长度
+	unsigned char *buf = m_ts.data + 5;//PAT位置
+	unsigned int crc = getCRC(av_crc(av_crc_table,-1,buf,len-4));
+
 	if(m_param->b_ts)
 	{
 		fprintf(g_ts_ts,"pointer_field:%d\n",pointer_field);
@@ -357,6 +541,10 @@ void Anlysis::anlysisPMT()
 		}
 
 		fprintf(g_ts_ts,"CRC_32:0x%X\n",m_pmt.CRC_32);
+		if(crc!=m_pmt.CRC_32)
+		{
+			fprintf(g_ts_ts,"error:CRC校验错误:0x%X  0x%X \n",m_pmt.CRC_32,crc);g_errors++;
+		}
 	}
 }
 
@@ -682,22 +870,10 @@ void Anlysis::anlysis()
 			printf("sync_byte error");
 			break;
 		}
-
 		
 		if(m_tsHeader.adaptation_field_control == 2 || m_tsHeader.adaptation_field_control == 3)//自适应字段解析
 		{
 			adaptation_field();
-		}
-
-		if(m_tsHeader.PID != m_PATPID && m_tsHeader.PID != m_PMTPID && m_tsHeader.PID != m_AudioPID && m_tsHeader.PID != m_VideoPID )//未知PID待解析
-		{
-			//待添加
-			if(m_param->b_ts)
-			{
-				fprintf(g_ts_ts,"目前只能解析PAT、PMT、音视频，其它PID暂无法解析\n");
-			}
-			m_tsConter++;
-			continue;
 		}
 
 		if(m_tsHeader.adaptation_field_control == 1 || m_tsHeader.adaptation_field_control == 3)//基本数据
@@ -725,6 +901,10 @@ void Anlysis::anlysis()
 				unsigned int packet_start_code_prefix = (m_ts.data[m_ts.count]<<16) + (m_ts.data[m_ts.count+1]<<8) + m_ts.data[m_ts.count+2];
 				if(packet_start_code_prefix == 0x000001)
 					anlysisPES();
+			}
+			else if(m_ts.data[m_ts.count+1] == 0x42 ||m_ts.data[m_ts.count+1] == 0x46 )//SDT
+			{
+				anlysisSDT();
 			}
 			else
 			{
