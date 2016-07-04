@@ -901,6 +901,10 @@ void Anlysis::anlysis()
 				unsigned int packet_start_code_prefix = (m_ts.data[m_ts.count]<<16) + (m_ts.data[m_ts.count+1]<<8) + m_ts.data[m_ts.count+2];
 				if(packet_start_code_prefix == 0x000001)
 					anlysisPES();
+				if(m_param->b_audio)
+				{
+					fwrite(m_ts.data+m_ts.count,1,188-m_ts.count,g_ts_audio);
+				}
 			}
 			else if(m_ts.data[m_ts.count+1] == 0x42 ||m_ts.data[m_ts.count+1] == 0x46 )//SDT
 			{
